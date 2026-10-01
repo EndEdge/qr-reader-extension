@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>二维码识别</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        width: 340px;
+        margin: 0;
+        padding: 14px;
+        background: #f8fafc;
+        color: #0f172a;
+        font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+      h1 { margin: 0; font-size: 16px; font-weight: 600; }
+      .local-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 8px;
+        border-radius: 6px;
+        border: 1px solid #a7f3d0;
+        background: #ecfdf5;
+        color: #047857;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .dropzone {
+        position: relative;
+        display: flex;
+        min-height: 180px;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 16px;
+        text-align: center;
+        border: 2px dashed #cbd5e1;
+        border-radius: 10px;
+        background: #ffffff;
+        cursor: pointer;
+        transition: border-color .15s, background-color .15s;
+      }
+      .dropzone:hover, .dropzone.drag-active { border-color: #60a5fa; background: #eff6ff; }
+      .dropzone .hint-strong { font-weight: 600; }
+      .dropzone .hint-weak { color: #64748b; font-size: 13px; }
+      .dropzone img.preview {
+        max-width: 100%;
+        max-height: 200px;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        object-fit: contain;
+      }
+      .scan-overlay {
+        position: absolute;
+        inset: 0;
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, .94);
+        color: #2563eb;
+        font-weight: 500;
+      }
+      .scan-overlay.visible { display: flex; }
+      .spinner {
+        width: 26px; height: 26px;
+        border: 3px solid #dbeafe;
+        border-top-color: #2563eb;
+        border-radius: 50%;
+        animation: spin .8s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .result-area { display: none; flex-direction: column; gap: 8px; margin-top: 12px; }
+      .result-area.visible { display: flex; }
+      .result-head { display: flex; align-items: center; justify-content: space-between; }
+      .result-title { font-size: 13px; font-weight: 600; color: #475569; }
+      .success-badge {
+        display: inline-flex;
+        padding: 2px 8px;
+        border-radius: 6px;
+        background: #ecfdf5;
+        color: #047857;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .result-wrap { position: relative; }
+      textarea {
+        width: 100%;
+        height: 96px;
+        resize: none;
+        padding: 10px 44px 10px 12px;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        background: #f8fafc;
+        color: #1e293b;
+        font-family: Consolas, Menlo, monospace;
+        font-size: 13px;
+        line-height: 1.5;
+        outline: none;
+      }
+      textarea:focus { border-color: #93c5fd; box-shadow: 0 0 0 3px #dbeafe; }
+      .copy-btn {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        width: 30px;
+        height: 30px;
+        padding: 0;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        background: #ffffff;
+        color: #64748b;
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .copy-btn:hover { color: #2563eb; border-color: #93c5fd; }
+      .visit-btn {
+        display: none;
+        padding: 9px;
+        border-radius: 8px;
+        background: #2563eb;
+        color: #ffffff;
+        font-weight: 600;
+        text-align: center;
+        text-decoration: none;
+      }
+      .visit-btn:hover { background: #1d4ed8; }
+      .error-box { display: none; margin-top: 12px; padding: 12px; border: 1px solid #fecdd3; border-radius: 8px; background: #fff1f2; color: #be123c; }
+      .error-box.visible { display: block; }
+      .error-box .error-title { font-weight: 600; }
+      .error-box .error-message { margin: 4px 0 0; font-size: 13px; color: #e11d48; }
+      .toast {
+        position: fixed;
+        left: 50%;
+        bottom: 12px;
+        transform: translate(-50%, 8px);
+        padding: 7px 16px;
+        border-radius: 999px;
+        background: #0f172a;
+        color: #ffffff;
+        font-size: 13px;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .25s, transform .25s;
+      }
+      .toast.toast-show { opacity: 1; transform: translate(-50%, 0); }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>二维码识别</h1>
+      <span class="local-badge">&#128737; 本地运行</span>
+    </header>
+
+    <div id="dropzone" class="dropzone">
+      <input id="file-input" type="file" accept="image/*" hidden />
+      <div id="drop-hint">
+        <p class="hint-strong">点击、拖拽或粘贴图片</p>
+        <p class="hint-weak">识别在本地完成，图片不会上传</p>
+      </div>
+      <img id="preview" class="preview" alt="待识别图片预览" style="display: none" />
+      <div id="scan-overlay" class="scan-overlay">
+        <div class="spinner"></div>
+        <span id="scan-status">正在分析...</span>
+      </div>
+    </div>
+
+    <div id="result-area" class="result-area">
+      <div class="result-head">
+        <span class="result-title">识别内容</span>
+        <span class="success-badge">&#10003; SUCCESS</span>
+      </div>
+      <div class="result-wrap">
+        <textarea id="result" readonly spellcheck="false"></textarea>
+        <button id="copy-btn" class="copy-btn" title="复制">&#128203;</button>
+      </div>
+      <a id="visit-btn" class="visit-btn" target="_blank" rel="noreferrer">&#8599; 访问链接</a>
+    </div>
+
+    <div id="error-box" class="error-box">
+      <span class="error-title">无法识别</span>
+      <p class="error-message">未能从图片中提取出有效二维码内容，请尝试裁剪图片，仅保留二维码区域。</p>
+    </div>
+
+    <div id="toast" class="toast">&#10003; 已复制</div>
+
+    <script src="./popup.js"></script>
+  </body>
+</html>
