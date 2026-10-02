@@ -104,7 +104,8 @@ function detectQrRegions(data: Uint8ClampedArray, width: number, height: number)
     ...findFinderClusters(data, width, height, false),
     ...findFinderClusters(data, width, height, true),
   ]
-    .filter((cluster) => cluster.count >= 4)
+    // 小尺寸码（模块 2~3px）因抗锯齿每行命中少，阈值须保守；误检由分组的几何约束排除
+    .filter((cluster) => cluster.count >= 3)
     .sort((a, b) => b.count - a.count)
     .slice(0, 24);
 
