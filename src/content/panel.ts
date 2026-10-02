@@ -1,6 +1,6 @@
 export type PanelState =
   | { kind: 'loading'; status: 'analyzing' | 'deep-scan' }
-  | { kind: 'success'; result: string; thumbnail: string }
+  | { kind: 'success'; results: string[]; thumbnail: string }
   | { kind: 'error' };
 
 const HOST_ID = '__qr-reader-ext-panel';
@@ -20,6 +20,8 @@ const STYLE = `
     bottom: 24px;
     width: 340px;
     max-width: calc(100vw - 32px);
+    max-height: calc(100vh - 48px);
+    overflow-y: auto;
     background: #ffffff;
     border: 1px solid #e2e8f0;
     border-radius: 12px;
@@ -60,8 +62,8 @@ const STYLE = `
   @keyframes qr-ext-spin { to { transform: rotate(360deg); } }
   .status { color: #2563eb; font-weight: 500; }
   .success { display: none; flex-direction: column; gap: 10px; }
+  .badge-row { display: flex; align-items: center; gap: 8px; }
   .badge {
-    align-self: flex-start;
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -72,6 +74,7 @@ const STYLE = `
     font-size: 12px;
     font-weight: 600;
   }
+  .count { font-size: 12px; color: #64748b; font-weight: 600; }
   .thumb {
     max-width: 100%;
     max-height: 140px;
@@ -80,10 +83,13 @@ const STYLE = `
     border-radius: 8px;
     object-fit: contain;
   }
+  .results { display: flex; flex-direction: column; gap: 14px; }
+  .result-item { display: flex; flex-direction: column; gap: 6px; }
+  .index { font-size: 12px; font-weight: 600; color: #64748b; }
   .result-wrap { position: relative; }
   .result {
     width: 100%;
-    height: 108px;
+    height: 96px;
     resize: none;
     border: 1px solid #e2e8f0;
     border-radius: 8px;
@@ -114,7 +120,7 @@ const STYLE = `
   .visit {
     display: none;
     text-align: center;
-    padding: 10px;
+    padding: 8px;
     border-radius: 8px;
     background: #2563eb;
     color: #ffffff;
@@ -169,13 +175,12 @@ const TEMPLATE = `
         <div class="status">正在分析...</div>
       </div>
       <div class="success">
-        <span class="badge">&#10003; SUCCESS</span>
-        <img class="thumb" alt="已识别图片预览" />
-        <div class="result-wrap">
-          <textarea class="result" readonly spellcheck="false"></textarea>
-          <button class="copy" title="复制">&#128203;</button>
+        <div class="badge-row">
+          <span class="badge">&#10003; SUCCESS</span>
+          <span class="count"></span>
         </div>
-        <a class="visit" target="_blank" rel="noreferrer">&#8599; 访问链接</a>
+        <img class="thumb" alt="已识别图片预览" />
+        <div class="results"></div>
       </div>
       <div class="error">
         <span class="error-title">无法识别</span>
@@ -194,9 +199,6 @@ export function setPanelState(state: PanelState) {
   const root = getRoot();
   const card = root.querySelector<HTMLElement>('.card')!;
   const statusText = root.querySelector<HTMLElement>('.status')!;
-  const result = root.querySelector<HTMLTextAreaElement>('.result')!;
-  const thumb = root.querySelector<HTMLImageElement>('.thumb')!;
-  const visit = root.querySelector<HTMLAnchorElement>('.visit')!;
 
   card.classList.remove('is-loading', 'is-success', 'is-error');
 
@@ -212,15 +214,59 @@ export function setPanelState(state: PanelState) {
   }
 
   card.classList.add('is-success');
-  result.value = state.result;
-  thumb.src = state.thumbnail;
+  (root.querySelector('.count') as HTMLElement).textContent =
+    state.results.length > 1 ? `共 ${state.results.length} 个结果` : '';
+  (root.querySelector('.thumb') as HTMLImageElement).src = state.thumbnail;
+  renderResults(root, state.results);
+}
 
-  if (isValidUrl(state.result)) {
-    visit.href = state.result;
-    visit.style.display = 'block';
-  } else {
-    visit.style.display = 'none';
-  }
+function renderResults(root: ShadowRoot, results: string[]) {
+  const list = root.querySelector('.results')!;
+  list.innerHTML = '';
+
+  results.forEach((text, index) => {
+    const item = document.createElement('div');
+    item.className = 'result-item';
+
+    if (results.length > 1) {
+      const tag = document.createElement('span');
+      tag.className = 'index';
+      tag.textContent = `#${index + 1}`;
+      item.appendChild(tag);
+    }
+
+    const wrap = document.createElement('div');
+    wrap.className = 'result-wrap';
+
+    const textarea = document.createElement('textarea');
+    textarea.className = 'result';
+    textarea.readOnly = true;
+    textarea.spellcheck = false;
+    textarea.value = text;
+
+    const copyButton = document.createElement('button');
+    copyButton.className = 'copy';
+    copyButton.title = '复制';
+    copyButton.innerHTML = '&#128203;';
+    copyButton.addEventListener('click', () => {
+      void copyResult(root, textarea.value);
+    });
+
+    wrap.append(textarea, copyButton);
+    item.appendChild(wrap);
+
+    if (isValidUrl(text)) {
+      const visit = document.createElement('a');
+      visit.className = 'visit';
+      visit.target = '_blank';
+      visit.rel = 'noreferrer';
+      visit.href = text;
+      visit.innerHTML = '&#8599; 访问链接';
+      item.appendChild(visit);
+    }
+
+    list.appendChild(item);
+  });
 }
 
 export function hidePanel() {
@@ -239,16 +285,9 @@ function getRoot(): ShadowRoot {
   (document.body ?? document.documentElement).appendChild(host);
   const root = host.attachShadow({ mode: 'open' });
   root.innerHTML = `<style>${STYLE}</style>${TEMPLATE}`;
-  wireEvents(root);
-  return root;
-}
-
-function wireEvents(root: ShadowRoot) {
   root.querySelector('.close')!.addEventListener('click', hidePanel);
-  root.querySelector('.copy')!.addEventListener('click', () => {
-    void copyResult(root);
-  });
   document.addEventListener('keydown', onKeyDown);
+  return root;
 }
 
 function onKeyDown(event: KeyboardEvent) {
@@ -257,8 +296,7 @@ function onKeyDown(event: KeyboardEvent) {
   }
 }
 
-async function copyResult(root: ShadowRoot) {
-  const text = root.querySelector<HTMLTextAreaElement>('.result')!.value;
+async function copyResult(root: ShadowRoot, text: string) {
   if (!text || !(await copyText(text))) {
     return;
   }

@@ -26,10 +26,10 @@ async function runTask(dataUrl: string | undefined, srcUrl: string | undefined) 
 
   try {
     const blob = await loadBlob(dataUrl, srcUrl);
-    const result = await decodeQrBlob(blob, (status) => {
+    const results = await decodeQrBlob(blob, (status) => {
       setPanelState({ kind: 'loading', status });
     });
-    setPanelState({ kind: 'success', result, thumbnail: dataUrl ?? srcUrl ?? '' });
+    setPanelState({ kind: 'success', results, thumbnail: dataUrl ?? srcUrl ?? '' });
   } catch {
     setPanelState({ kind: 'error' });
   }
