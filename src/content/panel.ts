@@ -118,7 +118,7 @@ const STYLE = `
   }
   .copy:hover { color: #2563eb; border-color: #93c5fd; }
   .visit {
-    display: none;
+    display: block;
     text-align: center;
     padding: 8px;
     border-radius: 8px;
